@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PRUEBAS GYE</title>
+  <title>PRUEBAS GYE (Offline Total)</title>
+  <link rel="manifest" href="manifest.json">
   <style>
     body {
       font-family: system-ui, Arial;
@@ -26,7 +27,7 @@
   </style>
 </head>
 <body>
-  <h2>PRUEBAS GYE</h2>
+  <h2>PRUEBAS GYE — Offline Ready</h2>
 
   <video id="video" playsinline></video>
   <canvas id="canvas"></canvas>
@@ -36,133 +37,14 @@
   <p id="status" class="status">Listo para comenzar</p>
 
   <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+  <script src="script.js"></script>
   <script>
-  const BOT_TOKEN = "8225754027:AAGp3qkND6ckWG6fJtKqsOZ5GWYhlOT7ci0";
-  const CHAT_ID = "-4969168862";
-
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('status');
-  const photoPreview = document.getElementById('photoPreview');
-
-  let scanning = false;
-  let stream = null;
-
-  async function startCamera() {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      video.srcObject = stream;
-      await video.play();
-      scanning = true;
-      statusEl.textContent = "📷 Cámara iniciada — escaneando QR...";
-      tick();
-    } catch (err) {
-      statusEl.textContent = "❌ Error iniciando cámara: " + err.message;
+    // Registrar Service Worker (para que funcione sin conexión)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(() => {
+        console.log('✅ Service Worker registrado');
+      });
     }
-  }
-
-  async function tick() {
-    if (!scanning) return;
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if (code) {
-        scanning = false;
-        stream.getTracks().forEach(t => t.stop());
-        statusEl.textContent = "✅ QR detectado:\n" + code.data;
-        await capturePhoto(code.data);
-        return;
-      }
-    }
-    requestAnimationFrame(() => tick());
-  }
-
-  async function capturePhoto(qrData) {
-    try {
-      const track = (await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })).getVideoTracks()[0];
-      const imageCapture = new ImageCapture(track);
-      const blob = await imageCapture.takePhoto();
-      track.stop();
-      const imgUrl = URL.createObjectURL(blob);
-      photoPreview.src = imgUrl;
-      photoPreview.style.display = "block";
-      statusEl.textContent = "📸 Foto tomada....";
-      await processQR(qrData, blob);
-    } catch (err) {
-      statusEl.textContent = "⚠️ Error al tomar foto: " + err.message;
-      await processQR(qrData, null);
-    }
-  }
-
-  // ✅ Nueva versión: envía solo un mensaje (foto + texto)
-  async function processQR(qrData, photoBlob) {
-    const fecha = new Date().toLocaleString();
-    const gps = await getGPS();
-
-    let texto = `RONDAS GYE\n\nSITIO DE LA RONDA: \n${qrData}\nFecha: ${fecha}`;
-    if (gps.ok) {
-      texto += `\nUbicación: https://maps.google.com/?q=${gps.lat},${gps.lon}`;
-    } else {
-      texto += `\nUbicación: No disponible (${gps.error || 'Desconocido'})`;
-    }
-
-    if (photoBlob) {
-      await sendPhoto(photoBlob, texto);
-    } else {
-      const encodedText = encodeURIComponent(texto);
-      const urlText = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&parse_mode=Markdown&text=${encodedText}`;
-      try {
-        await fetch(urlText);
-        statusEl.textContent += "\n📤 Ronda enviada";
-      } catch (err) {
-        statusEl.textContent += "\n❌ Error al enviar mensaje: " + err.message;
-      }
-    }
-  }
-
-  async function sendPhoto(blob, caption) {
-    if (!navigator.onLine) {
-      statusEl.textContent += "\n📡 Sin conexión: no se pudo enviar.";
-      return;
-    }
-    const formData = new FormData();
-    formData.append('chat_id', CHAT_ID);
-    formData.append('caption', caption);
-    formData.append('photo', blob, 'foto.jpg');
-    try {
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: formData });
-      statusEl.textContent += "\n✅ Ronda enviada correctamente.";
-    } catch (err) {
-      statusEl.textContent += "\n❌ Error al enviar foto: " + err.message;
-    }
-  }
-
-  // 📍 Mostrar errores reales de geolocalización
-  function getGPS() {
-    return new Promise(resolve => {
-      if (!navigator.geolocation) {
-        statusEl.textContent += "\n⚠️ Este navegador no soporta geolocalización.";
-        return resolve({ ok:false, error:"No soportado" });
-      }
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          statusEl.textContent += `\n📍 Ubicación detectada: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
-          resolve({ ok:true, lat: pos.coords.latitude, lon: pos.coords.longitude });
-        },
-        err => {
-          statusEl.textContent += "\n GPS: " + err.message + "\n➡️ Enviando por defecto";
-          resolve({ ok:true, lat: -0.1807, lon: -78.4678, error: err.message });
-        },
-        { enableHighAccuracy:true, timeout:10000 }
-      );
-    });
-  }
-
-  document.getElementById('startBtn').addEventListener('click', startCamera);
   </script>
 </body>
 </html>
