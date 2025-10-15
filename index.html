@@ -103,11 +103,11 @@
     const fecha = new Date().toLocaleString();
     const gps = await getGPS();
 
-    let texto = `*Lectura QR*\n\n*Contenido:* ${qrData}\n*Fecha:* ${fecha}`;
+    let texto = `RONDAS GYE\n\nSITIO DE LA RONDA ${qrData}\nFecha: ${fecha}`;
     if (gps.ok) {
-      texto += `\n*Ubicación:* https://maps.google.com/?q=${gps.lat},${gps.lon}`;
+      texto += `\nUbicación: https://maps.google.com/?q=${gps.lat},${gps.lon}`;
     } else {
-      texto += `\n*Ubicación:* No disponible (${gps.error || 'Desconocido'})`;
+      texto += `\nUbicación: No disponible (${gps.error || 'Desconocido'})`;
     }
 
     if (photoBlob) {
