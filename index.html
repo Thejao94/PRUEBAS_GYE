@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>QR + Foto → Telegram</title>
+  <style>
+    body { font-family: system-ui, Arial; margin:0; padding:10px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+    #video, #photoPreview { width:100%; max-width:600px; background:#000; border-radius:10px; }
+    #canvas { display:none; }
+    button { width:100%; margin:5px 0; padding:10px; border-radius:8px; border:1px solid #ccc; background:#222; color:white; font-weight:bold; }
+    .status { font-size:0.9rem; color:#444; text-align:center; }
+  </style>
+</head>
+<body>
+  <h2>Escáner QR + Foto → Telegram</h2>
+
+  <video id="video" playsinline></video>
+  <canvas id="canvas"></canvas>
+  <img id="photoPreview" style="display:none"/>
+
+  <button id="startBtn">Iniciar escaneo QR</button>
+  <p class="status" id="status">Listo para comenzar</p>
+
+  <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+  <script>
+  const BOT_TOKEN = "8225754027:AAGp3qkND6ckWG6fJtKqsOZ5GWYhlOT7ci0";
+  const CHAT_ID = "-4969168862";
+
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('status');
+  const photoPreview = document.getElementById('photoPreview');
+
+  let scanning = false;
+  let stream = null;
+
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+      await video.play();
+      scanning = true;
+      statusEl.textContent = "Escaneando QR...";
+      tick();
+    } catch (err) {
+      alert("Error iniciando cámara: " + err.message);
+    }
+  }
+
+  async function tick() {
+    if (!scanning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if (code) {
+        scanning = false;
+        stream.getTracks().forEach(t => t.stop());
+        statusEl.textContent = "QR detectado: " + code.data;
+        await capturePhoto(code.data);
+        return;
+      }
+    }
+    requestAnimationFrame(() => tick());
+  }
+
+  async function capturePhoto(qrData) {
+    try {
+      const track = (await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })).getVideoTracks()[0];
+      const imageCapture = new ImageCapture(track);
+      const blob = await imageCapture.takePhoto();
+      track.stop();
+      const imgUrl = URL.createObjectURL(blob);
+      photoPreview.src = imgUrl;
+      photoPreview.style.display = "block";
+      statusEl.textContent = "Foto tomada, enviando...";
+      await processQR(qrData, blob);
+    } catch (err) {
+      alert("Error al tomar foto: " + err.message);
+      await processQR(qrData, null);
+    }
+  }
+
+  async function processQR(qrData, photoBlob) {
+    const fecha = new Date().toLocaleString();
+    const gps = await getGPS();
+
+    let texto = `*Lectura QR*\n\n*Contenido:* ${qrData}\n*Fecha:* ${fecha}`;
+    if (gps.ok) {
+      texto += `\n*Ubicación:* https://maps.google.com/?q=${gps.lat},${gps.lon}`;
+    } else {
+      texto += `\n*Ubicación:* No disponible`;
+    }
+
+    const encodedText = encodeURIComponent(texto);
+    const urlText = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&parse_mode=Markdown&text=${encodedText}`;
+
+    if (navigator.onLine) {
+      fetch(urlText);
+      statusEl.textContent = "Mensaje enviado a Telegram 📤";
+    } else {
+      localStorage.setItem('pendienteMsg', JSON.stringify({ url: urlText }));
+      statusEl.textContent = "Sin señal: mensaje guardado.";
+    }
+
+    if (photoBlob) await sendPhoto(photoBlob, texto);
+  }
+
+  async function sendPhoto(blob, caption) {
+    if (!navigator.onLine) return;
+    const formData = new FormData();
+    formData.append('chat_id', CHAT_ID);
+    formData.append('caption', caption);
+    formData.append('photo', blob, 'foto.jpg');
+    try {
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: formData });
+      statusEl.textContent = "Foto enviada correctamente ✅";
+    } catch (err) {
+      alert("Error al enviar foto: " + err.message);
+    }
+  }
+
+  function getGPS() {
+    return new Promise(resolve => {
+      if (!navigator.geolocation) return resolve({ ok:false });
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({ ok:true, lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        () => resolve({ ok:false }),
+        { enableHighAccuracy:true, timeout:10000 }
+      );
+    });
+  }
+
+  document.getElementById('startBtn').addEventListener('click', startCamera);
+
+  window.addEventListener('load', () => {
+    if (navigator.onLine) {
+      const pending = localStorage.getItem('pendienteMsg');
+      if (pending) {
+        const { url } = JSON.parse(pending);
+        fetch(url);
+        localStorage.removeItem('pendienteMsg');
+        statusEl.textContent = "Mensaje pendiente enviado.";
+      }
+    }
+  });
+  </script>
+</body>
+</html>
