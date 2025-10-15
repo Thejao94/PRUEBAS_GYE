@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PRUEBAS RONDAS GYE</title>
+  <title>PRUEBAS GYE</title>
   <style>
     body {
       font-family: system-ui, Arial;
@@ -26,7 +26,7 @@
   </style>
 </head>
 <body>
-  <h2>PRUEBAS RONDAS GYE</h2>
+  <h2>PRUEBAS GYE</h2>
 
   <video id="video" playsinline></video>
   <canvas id="canvas"></canvas>
@@ -34,6 +34,7 @@
 
   <button id="startBtn">Iniciar escaneo QR</button>
   <p id="status" class="status">Listo para comenzar</p>
+
   <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
   <script>
   const BOT_TOKEN = "8225754027:AAGp3qkND6ckWG6fJtKqsOZ5GWYhlOT7ci0";
@@ -97,6 +98,7 @@
     }
   }
 
+  // ✅ Nueva versión: envía solo un mensaje (foto + texto)
   async function processQR(qrData, photoBlob) {
     const fecha = new Date().toLocaleString();
     const gps = await getGPS();
@@ -108,35 +110,38 @@
       texto += `\n*Ubicación:* No disponible (${gps.error || 'Desconocido'})`;
     }
 
-    const encodedText = encodeURIComponent(texto);
-    const urlText = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&parse_mode=Markdown&text=${encodedText}`;
-
-    if (navigator.onLine) {
-      fetch(urlText);
-      statusEl.textContent += "\n📤 Mensaje enviado a Telegram";
+    if (photoBlob) {
+      await sendPhoto(photoBlob, texto);
     } else {
-      localStorage.setItem('pendienteMsg', JSON.stringify({ url: urlText }));
-      statusEl.textContent += "\n📡 Sin conexión: mensaje guardado localmente.";
+      const encodedText = encodeURIComponent(texto);
+      const urlText = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&parse_mode=Markdown&text=${encodedText}`;
+      try {
+        await fetch(urlText);
+        statusEl.textContent += "\n📤 Mensaje (solo texto) enviado a Telegram";
+      } catch (err) {
+        statusEl.textContent += "\n❌ Error al enviar mensaje: " + err.message;
+      }
     }
-
-    if (photoBlob) await sendPhoto(photoBlob, texto);
   }
 
   async function sendPhoto(blob, caption) {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine) {
+      statusEl.textContent += "\n📡 Sin conexión: no se pudo enviar.";
+      return;
+    }
     const formData = new FormData();
     formData.append('chat_id', CHAT_ID);
     formData.append('caption', caption);
     formData.append('photo', blob, 'foto.jpg');
     try {
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: formData });
-      statusEl.textContent += "\n✅ Foto enviada correctamente.";
+      statusEl.textContent += "\n✅ Mensaje con foto enviado correctamente.";
     } catch (err) {
       statusEl.textContent += "\n❌ Error al enviar foto: " + err.message;
     }
   }
 
-  // Nueva versión: diagnóstico detallado de geolocalización
+  // 📍 Mostrar errores reales de geolocalización
   function getGPS() {
     return new Promise(resolve => {
       if (!navigator.geolocation) {
@@ -158,18 +163,6 @@
   }
 
   document.getElementById('startBtn').addEventListener('click', startCamera);
-
-  window.addEventListener('load', () => {
-    if (navigator.onLine) {
-      const pending = localStorage.getItem('pendienteMsg');
-      if (pending) {
-        const { url } = JSON.parse(pending);
-        fetch(url);
-        localStorage.removeItem('pendienteMsg');
-        statusEl.textContent = "📨 Mensaje pendiente enviado.";
-      }
-    }
-  });
   </script>
 </body>
 </html>
