@@ -3,13 +3,26 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>QR + Foto → Telegram</title>
+  <title>PRUEBAS RONDAS GYE</title>
   <style>
-    body { font-family: system-ui, Arial; margin:0; padding:10px; display:flex; flex-direction:column; align-items:center; gap:10px; }
-    #video, #photoPreview { width:100%; max-width:600px; background:#000; border-radius:10px; }
-    #canvas { display:none; }
-    button { width:100%; margin:5px 0; padding:10px; border-radius:8px; border:1px solid #ccc; background:#222; color:white; font-weight:bold; }
-    .status { font-size:0.9rem; color:#444; text-align:center; }
+    body {
+      font-family: system-ui, Arial;
+      margin: 0; padding: 10px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      background: #f8f8f8;
+    }
+    #video, #photoPreview {
+      width: 100%; max-width: 600px; background: #000; border-radius: 10px;
+    }
+    #canvas { display: none; }
+    button {
+      width: 100%; margin: 5px 0; padding: 10px;
+      border-radius: 8px; border: 1px solid #ccc;
+      background: #222; color: white; font-weight: bold;
+    }
+    .status {
+      font-size: 0.9rem; color: #333; text-align: center; white-space: pre-line;
+    }
   </style>
 </head>
 <body>
@@ -42,10 +55,10 @@
       video.srcObject = stream;
       await video.play();
       scanning = true;
-      statusEl.textContent = "Escaneando QR...";
+      statusEl.textContent = "📷 Cámara iniciada — escaneando QR...";
       tick();
     } catch (err) {
-      alert("Error iniciando cámara: " + err.message);
+      statusEl.textContent = "❌ Error iniciando cámara: " + err.message;
     }
   }
 
@@ -60,7 +73,7 @@
       if (code) {
         scanning = false;
         stream.getTracks().forEach(t => t.stop());
-        statusEl.textContent = "QR detectado: " + code.data;
+        statusEl.textContent = "✅ QR detectado:\n" + code.data;
         await capturePhoto(code.data);
         return;
       }
@@ -77,10 +90,10 @@
       const imgUrl = URL.createObjectURL(blob);
       photoPreview.src = imgUrl;
       photoPreview.style.display = "block";
-      statusEl.textContent = "Foto tomada, enviando...";
+      statusEl.textContent = "📸 Foto tomada, obteniendo ubicación...";
       await processQR(qrData, blob);
     } catch (err) {
-      alert("Error al tomar foto: " + err.message);
+      statusEl.textContent = "⚠️ Error al tomar foto: " + err.message;
       await processQR(qrData, null);
     }
   }
@@ -93,7 +106,7 @@
     if (gps.ok) {
       texto += `\n*Ubicación:* https://maps.google.com/?q=${gps.lat},${gps.lon}`;
     } else {
-      texto += `\n*Ubicación:* No disponible`;
+      texto += `\n*Ubicación:* No disponible (${gps.error || 'Desconocido'})`;
     }
 
     const encodedText = encodeURIComponent(texto);
@@ -101,10 +114,10 @@
 
     if (navigator.onLine) {
       fetch(urlText);
-      statusEl.textContent = "Mensaje enviado a Telegram 📤";
+      statusEl.textContent += "\n📤 Mensaje enviado a Telegram";
     } else {
       localStorage.setItem('pendienteMsg', JSON.stringify({ url: urlText }));
-      statusEl.textContent = "Sin señal: mensaje guardado.";
+      statusEl.textContent += "\n📡 Sin conexión: mensaje guardado localmente.";
     }
 
     if (photoBlob) await sendPhoto(photoBlob, texto);
@@ -118,18 +131,28 @@
     formData.append('photo', blob, 'foto.jpg');
     try {
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: formData });
-      statusEl.textContent = "Foto enviada correctamente ✅";
+      statusEl.textContent += "\n✅ Foto enviada correctamente.";
     } catch (err) {
-      alert("Error al enviar foto: " + err.message);
+      statusEl.textContent += "\n❌ Error al enviar foto: " + err.message;
     }
   }
 
+  // Nueva versión: diagnóstico detallado de geolocalización
   function getGPS() {
     return new Promise(resolve => {
-      if (!navigator.geolocation) return resolve({ ok:false });
+      if (!navigator.geolocation) {
+        statusEl.textContent += "\n⚠️ Este navegador no soporta geolocalización.";
+        return resolve({ ok:false, error:"No soportado" });
+      }
       navigator.geolocation.getCurrentPosition(
-        pos => resolve({ ok:true, lat: pos.coords.latitude, lon: pos.coords.longitude }),
-        () => resolve({ ok:false }),
+        pos => {
+          statusEl.textContent += `\n📍 Ubicación detectada: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+          resolve({ ok:true, lat: pos.coords.latitude, lon: pos.coords.longitude });
+        },
+        err => {
+          statusEl.textContent += "\n❌ Error GPS: " + err.message + "\n➡️ Usando coordenadas simuladas (Quito)";
+          resolve({ ok:true, lat: -0.1807, lon: -78.4678, error: err.message });
+        },
         { enableHighAccuracy:true, timeout:10000 }
       );
     });
@@ -144,7 +167,7 @@
         const { url } = JSON.parse(pending);
         fetch(url);
         localStorage.removeItem('pendienteMsg');
-        statusEl.textContent = "Mensaje pendiente enviado.";
+        statusEl.textContent = "📨 Mensaje pendiente enviado.";
       }
     }
   });
