@@ -154,7 +154,7 @@
           resolve({ ok:true, lat: pos.coords.latitude, lon: pos.coords.longitude });
         },
         err => {
-          statusEl.textContent += "\n❌ Error GPS: " + err.message + "\n➡️ Enviando por defecto";
+          statusEl.textContent += "\n GPS: " + err.message + "\n➡️ Enviando por defecto";
           resolve({ ok:true, lat: -0.1807, lon: -78.4678, error: err.message });
         },
         { enableHighAccuracy:true, timeout:10000 }
