@@ -64,7 +64,7 @@ async function processQR(qrData, photoBlob) {
   const fecha = new Date().toLocaleString();
   const gps = await getGPS();
 
-  let texto = `RONDAS GYE\n\nSITIO DE LA RONDA:\n${qrData}\nFecha: ${fecha}`;
+  let texto = `RONDAS HCDA ZONA 9 - SAN FERMIN - AGROSABANA\n\nSITIO DE LA RONDA:\n${qrData}\nFecha: ${fecha}`;
   if (gps.ok) {
     texto += `\nUbicación: https://maps.google.com/?q=${gps.lat},${gps.lon}`;
   } else {
@@ -169,4 +169,5 @@ function getGPS() {
 
 document.getElementById('startBtn').addEventListener('click', startCamera);
 window.addEventListener('online', resendPending);
+
 
