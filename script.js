@@ -159,8 +159,8 @@ function getGPS() {
         resolve({ ok:true, lat: pos.coords.latitude, lon: pos.coords.longitude });
       },
       err => {
-        statusEl.textContent += "\n GPS: " + err.message + "\n➡️ Usando coordenadas simuladas.";
-        resolve({ ok:true, lat: -0.1807, lon: -78.4678, error: err.message });
+        statusEl.textContent += "\n GPS: " + err.message + "\n➡️ Usando coordenadas DF.";
+        resolve({ ok:true, lat: -2.317716, lon: -79.308199, error: err.message });
       },
       { enableHighAccuracy:true, timeout:10000 }
     );
@@ -169,3 +169,4 @@ function getGPS() {
 
 document.getElementById('startBtn').addEventListener('click', startCamera);
 window.addEventListener('online', resendPending);
+
